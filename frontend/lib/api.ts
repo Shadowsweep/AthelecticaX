@@ -23,8 +23,6 @@ function onRefreshed(token: string) {
   refreshSubscribers = [];
 }
 
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || "change-me";
-
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const apiUrl = getApiUrl();
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -33,9 +31,6 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const headers = new Headers(options.headers || {});
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
-  }
-  if (!headers.has("X-Admin-Key")) {
-    headers.set("X-Admin-Key", ADMIN_KEY);
   }
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");

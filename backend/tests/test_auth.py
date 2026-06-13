@@ -2,7 +2,7 @@ def test_signup_first_user_is_super_admin(client):
     # Register the first user
     response = client.post(
         "/api/v1/auth/signup",
-        json={"email": "first@athleticax.com", "password": "Password123!"}
+        json={"email": "first@athleticax.com", "password": "Password123!", "first_name": "System", "last_name": "Admin", "department": "IT"}
     )
     assert response.status_code == 201
     data = response.json()
@@ -15,13 +15,13 @@ def test_signup_subsequent_user_is_employee_pending(client):
     # Bootstrap the first user as SUPER_ADMIN
     client.post(
         "/api/v1/auth/signup",
-        json={"email": "admin@athleticax.com", "password": "Password123!"}
+        json={"email": "admin@athleticax.com", "password": "Password123!", "first_name": "System", "last_name": "Admin", "department": "IT"}
     )
     
     # Register a second user
     response = client.post(
         "/api/v1/auth/signup",
-        json={"email": "employee@athleticax.com", "password": "Password123!"}
+        json={"email": "employee@athleticax.com", "password": "Password123!", "first_name": "Test", "last_name": "Employee", "department": "Engineering"}
     )
     assert response.status_code == 201
     data = response.json()
@@ -33,12 +33,12 @@ def test_signup_duplicate_email(client):
     # Register user
     client.post(
         "/api/v1/auth/signup",
-        json={"email": "dup@athleticax.com", "password": "Password123!"}
+        json={"email": "dup@athleticax.com", "password": "Password123!", "first_name": "Dup", "last_name": "User", "department": "IT"}
     )
     # Register user with same email
     response = client.post(
         "/api/v1/auth/signup",
-        json={"email": "dup@athleticax.com", "password": "Password123!"}
+        json={"email": "dup@athleticax.com", "password": "Password123!", "first_name": "Dup", "last_name": "User", "department": "IT"}
     )
     assert response.status_code == 409
     assert response.json()["detail"] == "An account with this email already exists."
@@ -47,7 +47,7 @@ def test_login_success(client):
     # Register first user
     client.post(
         "/api/v1/auth/signup",
-        json={"email": "login@athleticax.com", "password": "Password123!"}
+        json={"email": "login@athleticax.com", "password": "Password123!", "first_name": "Login", "last_name": "User", "department": "IT"}
     )
     # Login
     response = client.post(
@@ -65,7 +65,7 @@ def test_login_incorrect_password(client):
     # Register first user
     client.post(
         "/api/v1/auth/signup",
-        json={"email": "incorrect@athleticax.com", "password": "Password123!"}
+        json={"email": "incorrect@athleticax.com", "password": "Password123!", "first_name": "Incorrect", "last_name": "User", "department": "IT"}
     )
     # Login with wrong password
     response = client.post(
@@ -79,7 +79,7 @@ def test_token_refresh(client):
     # Register first user
     client.post(
         "/api/v1/auth/signup",
-        json={"email": "refresh@athleticax.com", "password": "Password123!"}
+        json={"email": "refresh@athleticax.com", "password": "Password123!", "first_name": "Refresh", "last_name": "User", "department": "IT"}
     )
     # Login
     login_response = client.post(

@@ -11,6 +11,11 @@ class EmployeeRequest(Base):
     status = Column(String, default="PENDING", nullable=False) # PENDING, APPROVED, REJECTED
     reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     review_reason = Column(Text, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    department = Column(String, nullable=True)
+    designation = Column(String, nullable=True)
+    registration_ticket_path = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 

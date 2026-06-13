@@ -53,7 +53,11 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
     req_status = "APPROVED" if is_first_user else "PENDING"
     request = EmployeeRequest(
         user_id=user.id,
-        status=req_status
+        status=req_status,
+        first_name=user_in.first_name.strip(),
+        last_name=user_in.last_name.strip(),
+        department=user_in.department.strip(),
+        designation=user_in.designation.strip(),
     )
     db.add(request)
     db.commit()
@@ -77,6 +81,9 @@ def login(login_in: LoginRequest, db: Session = Depends(get_db)):
             detail="Account is deactivated"
         )
 
+    request = db.query(EmployeeRequest).filter(EmployeeRequest.user_id == user.id).first()
+    approval_status = request.status if request else "UNKNOWN"
+
     # Generate JWT tokens
     access_token = create_access_token(subject=user.id)
     refresh_token = create_refresh_token(subject=user.id)
@@ -84,7 +91,8 @@ def login(login_in: LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "user": user
+        "user": user,
+        "approval_status": approval_status,
     }
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -118,6 +126,38 @@ def refresh_token(refresh_in: TokenRefreshRequest, db: Session = Depends(get_db)
         "access_token": new_access_token,
         "refresh_token": new_refresh_token,
         "user": user
+    }
+
+from ....core.deps import get_current_user
+from ....models.profile import EmployeeProfile
+from pydantic import BaseModel
+from typing import Optional
+
+class MeResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    employee_code: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+
+@router.get("/me", response_model=MeResponse)
+def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(EmployeeProfile).filter(EmployeeProfile.user_id == current_user.id).first()
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "first_name": profile.first_name if profile else "System",
+        "last_name": profile.last_name if profile else "Administrator",
+        "employee_code": profile.employee_code if profile else "ADMIN",
+        "department": profile.department if profile else "IT",
+        "designation": profile.designation if profile else "Super Admin"
     }
 
 @router.post("/logout")

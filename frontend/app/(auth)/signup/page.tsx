@@ -21,6 +21,7 @@ import SportsKabaddiIcon from "@mui/icons-material/SportsKabaddi";
 import { api } from "../../../lib/api";
 import { RootState } from "../../../lib/store/store";
 import { toggleThemeMode } from "../../../lib/store/slices/themeSlice";
+import { setCredentials } from "../../../lib/store/slices/authSlice";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -28,6 +29,10 @@ export default function SignupPage() {
   const themeMode = useSelector((state: RootState) => state.theme.mode);
 
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
@@ -55,18 +60,34 @@ export default function SignupPage() {
     try {
       await api("/api/v1/auth/signup", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          first_name: firstName,
+          last_name: lastName,
+          department,
+          designation: designation || "Employee",
+        }),
       });
 
+      const login = await api<{
+        access_token: string;
+        refresh_token: string;
+        user: any;
+        approval_status: string;
+      }>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      dispatch(setCredentials({
+        token: login.access_token,
+        refreshToken: login.refresh_token,
+        user: login.user,
+      }));
       setSuccess(true);
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
-      
-      // Auto redirect to login after 3 seconds
       setTimeout(() => {
-        router.push("/login");
-      }, 3000);
+        router.push(login.approval_status === "APPROVED" ? "/" : "/approval");
+      }, 1500);
     } catch (err: any) {
       setError(err.message || "Registration sequence failed.");
     } finally {
@@ -182,6 +203,25 @@ export default function SignupPage() {
           )}
 
           <Box component="form" onSubmit={handleSubmit} noValidate>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <TextField required label="FIRST NAME" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <TextField required label="LAST NAME" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </Box>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="DEPARTMENT"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              fullWidth
+              label="DESIGNATION"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+            />
             <TextField
               margin="normal"
               required

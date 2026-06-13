@@ -29,40 +29,40 @@ export const darkTheme = createTheme({
     divider: "#1E293B",
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "sans-serif"',
+    fontFamily: 'var(--font-inter), "Roboto", "sans-serif"',
     h1: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 700,
       textTransform: "uppercase",
       letterSpacing: "0.1em",
     },
     h2: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 600,
       textTransform: "uppercase",
       letterSpacing: "0.08em",
     },
     h3: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 600,
     },
     h4: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 500,
     },
     h5: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 500,
     },
     h6: {
-      fontFamily: '"Orbitron", "sans-serif"',
+      fontFamily: 'var(--font-orbitron), "sans-serif"',
       fontWeight: 500,
     },
     subtitle1: {
-      fontFamily: '"Roboto Mono", monospace',
+      fontFamily: 'var(--font-roboto-mono), monospace',
     },
     subtitle2: {
-      fontFamily: '"Roboto Mono", monospace',
+      fontFamily: 'var(--font-roboto-mono), monospace',
     },
     body1: {
       fontSize: "0.875rem",
@@ -136,7 +136,17 @@ export const darkTheme = createTheme({
         },
       },
     },
+    MuiTextField: {
+      defaultProps: {
+        InputLabelProps: {
+          shrink: true,
+        },
+      } as any,
+    },
     MuiInputLabel: {
+      defaultProps: {
+        shrink: true,
+      },
       styleOverrides: {
         root: {
           fontFamily: "var(--font-roboto-mono)",

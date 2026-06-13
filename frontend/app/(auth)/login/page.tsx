@@ -37,7 +37,7 @@ export default function LoginPage() {
   // If already authenticated, redirect to dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      router.push("/dashboard");
+      router.push("/");
     }
   }, [isAuthenticated, router]);
 
@@ -51,6 +51,7 @@ export default function LoginPage() {
         access_token: string;
         refresh_token: string;
         user: any;
+        approval_status: string;
       }>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -65,20 +66,13 @@ export default function LoginPage() {
       );
 
       // Check if user is approved. If not approved, they go to /approval (Phase 2 screen)
-      if (data.user.role !== "SUPER_ADMIN") {
-        // We will fetch their approval request status to verify
-        try {
-          const reqStatus = await api<any>(`/api/v1/approval/status`, { method: "GET" }).catch(() => null);
-          if (!reqStatus || reqStatus.status !== "APPROVED") {
-            router.push("/approval");
-            return;
-          }
-        } catch {
-          // If the endpoint is not built yet (Phase 2), let them pass or fallback
-        }
+      if (data.user.role !== "SUPER_ADMIN" && data.approval_status !== "APPROVED") {
+        router.push("/approval");
+        return;
       }
 
-      router.push("/dashboard");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next?.startsWith("/") ? next : "/");
     } catch (err: any) {
       setError(err.message || "Authentication sequence failed.");
     } finally {

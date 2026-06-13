@@ -1,8 +1,8 @@
 backend/.venv/
 backend/employees.db
+backend/registration_tickets/
 backend/**/__pycache__/
 backend/**/*.pyc
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
-

@@ -1,12 +1,11 @@
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, date
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .core.config import settings
-from .core.database import engine, Base, get_db
+from .core.database import engine, Base, get_db, ensure_runtime_schema
 from .core.security import create_qr_token, verify_qr_token
 from .models.user import User
 from .models.profile import EmployeeProfile
@@ -14,12 +13,14 @@ from .models.attendance import Attendance, AttendanceLog
 from .models.request import EmployeeRequest
 from .schemas.auth import UserCreate
 from .api.v1.router import api_router
+from .core.deps import get_current_approved_user, RoleChecker
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure tables are created (though we also use Alembic)
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_schema()
     yield
 
 
@@ -45,16 +46,6 @@ app.add_middleware(
 # Include the API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Legacy Require Admin (using environment key header verification for backward compatibility)
-ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me")
-
-def require_admin(x_admin_key: str = Header(default="")):
-    if not ADMIN_KEY or not __import__("hmac").compare_digest(x_admin_key, ADMIN_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Invalid admin key."
-        )
-
 # Helper to format legacy employee dict
 def employee_dict(profile: EmployeeProfile):
     aware_created = profile.user.created_at.replace(tzinfo=timezone.utc)
@@ -73,15 +64,22 @@ def health():
     return {"status": "ok"}
 
 # Legacy GET /employees refactored to query EmployeeProfile
-@app.get("/employees", dependencies=[Depends(require_admin)])
-def list_employees(db: Session = Depends(get_db)):
+@app.get("/employees")
+def list_employees(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(RoleChecker(allowed_roles=["SUPER_ADMIN"])),
+):
     profiles = db.query(EmployeeProfile).join(User).order_by(EmployeeProfile.first_name).all()
     return [employee_dict(p) for p in profiles]
 
 # Legacy POST /employees refactored to create User + Profile
 
-@app.post("/employees", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
-def create_employee(data: dict, db: Session = Depends(get_db)):
+@app.post("/employees", status_code=status.HTTP_201_CREATED)
+def create_employee(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(RoleChecker(allowed_roles=["SUPER_ADMIN"])),
+):
     email = data.get("email", "").strip().lower()
     code = data.get("employee_code", "").strip().upper()
     name = data.get("name", "").strip()
@@ -144,8 +142,12 @@ def create_employee(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to create employee: {str(e)}")
 
 # Legacy DELETE /employees/{id} refactored to set active = 0 on user
-@app.delete("/employees/{employee_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
-def deactivate_employee(employee_id: int, db: Session = Depends(get_db)):
+@app.delete("/employees/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deactivate_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(RoleChecker(allowed_roles=["SUPER_ADMIN"])),
+):
     profile = db.query(EmployeeProfile).filter(EmployeeProfile.id == employee_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Employee not found.")
@@ -154,8 +156,8 @@ def deactivate_employee(employee_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 # Legacy GET /qr/current
-@app.get("/qr/current", dependencies=[Depends(require_admin)])
-def current_qr():
+@app.get("/qr/current")
+def current_qr(current_admin: User = Depends(RoleChecker(allowed_roles=["SUPER_ADMIN"]))):
     token, expires_at = create_qr_token()
     return {
         "token": token,
@@ -165,20 +167,20 @@ def current_qr():
 
 # Legacy POST /attendance/scan refactored to support EmployeeProfile and AttendanceLogs
 @app.post("/attendance/scan")
-def scan_attendance(data: dict, db: Session = Depends(get_db)):
+def scan_attendance(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_approved_user),
+):
     token = data.get("token")
-    employee_code = data.get("employee_code", "").strip().upper()
 
-    if not token or not employee_code:
-        raise HTTPException(status_code=400, detail="Missing token or employee_code")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing QR token")
 
     verify_qr_token(token)
     
     # Query profile
-    profile = db.query(EmployeeProfile).join(User).filter(
-        EmployeeProfile.employee_code == employee_code,
-        User.is_active == True
-    ).first()
+    profile = db.query(EmployeeProfile).filter(EmployeeProfile.user_id == current_user.id).first()
     
     if not profile:
         raise HTTPException(status_code=404, detail="Active employee code not found.")
@@ -192,41 +194,72 @@ def scan_attendance(data: dict, db: Session = Depends(get_db)):
         Attendance.date == today
     ).first()
 
-    if attendance:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Attendance is already recorded for today."
-        )
-
     try:
-        # Create attendance entry
-        attendance = Attendance(
-            employee_profile_id=profile.id,
-            date=today,
-            checked_in_at=now,
-            status="PRESENT"
-        )
-        db.add(attendance)
-        db.flush()
+        if not attendance:
+            # Create check-in entry
+            attendance = Attendance(
+                employee_profile_id=profile.id,
+                date=today,
+                checked_in_at=now,
+                status="PRESENT"
+            )
+            db.add(attendance)
+            db.flush()
 
-        # Add tap-in log
-        log = AttendanceLog(
-            attendance_id=attendance.id,
-            action="TAP_IN",
-            timestamp=now,
-            verified_via_qr=True
-        )
-        db.add(log)
-        db.commit()
-        db.refresh(profile)
-        return {"message": "Attendance recorded successfully.", "employee": employee_dict(profile)}
+            log = AttendanceLog(
+                attendance_id=attendance.id,
+                action="TAP_IN",
+                timestamp=now,
+                verified_via_qr=True
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(profile)
+            name = f"{profile.first_name} {profile.last_name}"
+            return {
+                "message": f"Welcome, {name}! Checked in successfully.",
+                "employee": employee_dict(profile),
+                "action": "TAP_IN"
+            }
+        else:
+            if attendance.checked_out_at is not None:
+                raise HTTPException(status_code=409, detail="Today's tap-in and tap-out are already complete.")
+            # Create check-out entry
+            attendance.checked_out_at = now
+            in_time = attendance.checked_in_at
+            if in_time.tzinfo is None:
+                in_time = in_time.replace(tzinfo=timezone.utc)
+            delta = now - in_time
+            attendance.work_hours = round(delta.total_seconds() / 3600.0, 2)
+
+            log = AttendanceLog(
+                attendance_id=attendance.id,
+                action="TAP_OUT",
+                timestamp=now,
+                verified_via_qr=True
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(profile)
+            name = f"{profile.first_name} {profile.last_name}"
+            return {
+                "message": f"Goodbye, {name}! Checked out successfully.",
+                "employee": employee_dict(profile),
+                "action": "TAP_OUT"
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # Legacy GET /attendance refactored
-@app.get("/attendance", dependencies=[Depends(require_admin)])
-def list_attendance(date_str: str | None = Query(default=None, alias="date"), db: Session = Depends(get_db)):
+@app.get("/attendance")
+def list_attendance(
+    date_str: str | None = Query(default=None, alias="date"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(RoleChecker(allowed_roles=["SUPER_ADMIN"])),
+):
     if date_str:
         try:
             query_date = date.fromisoformat(date_str)
