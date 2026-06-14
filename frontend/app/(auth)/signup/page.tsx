@@ -12,7 +12,8 @@ import {
   Alert, 
   IconButton, 
   Link,
-  Paper 
+  Paper,
+  MenuItem
 } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
@@ -32,7 +33,7 @@ export default function SignupPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [department, setDepartment] = useState("");
-  const [designation, setDesignation] = useState("");
+  const [designation, setDesignation] = useState("Employee");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
@@ -216,12 +217,17 @@ export default function SignupPage() {
               onChange={(e) => setDepartment(e.target.value)}
             />
             <TextField
+              select
               margin="normal"
               fullWidth
               label="DESIGNATION"
               value={designation}
               onChange={(e) => setDesignation(e.target.value)}
-            />
+            >
+              <MenuItem value="Employee">Employee</MenuItem>
+              <MenuItem value="HR">HR</MenuItem>
+              <MenuItem value="Manager">Manager</MenuItem>
+            </TextField>
             <TextField
               margin="normal"
               required
